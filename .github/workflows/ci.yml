@@ -54,4 +54,61 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: bandit.sarif
+
+
+
+  docker-scout:
+    runs-on: ubuntu-latest
+    needs: bandit-sast
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+
+      # Optional push to Docker Hub (only if you set secrets)
+      - name: Docker login (Docker Hub)
+        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Marketplace action (easiest path)
+      - name: Docker Scout quickview (summary)
+        id: scout-quick
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: quickview
+          image: local://ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          summary: true
+
+      - name: Docker Scout CVEs (critical/high, fixed only) -> SARIF
+        id: scout-cves
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: local://ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          only-severities: critical,high
+          only-fixed: true
+          ignore-base: false
+          sarif-file: docker-scout.sarif
+          summary: true
+
+      - name: Upload Docker Scout SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: docker-scout.sarif
+
 # Updated to ignore low severity/low confidence issues
