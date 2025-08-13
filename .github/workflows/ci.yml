@@ -54,3 +54,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: bandit.sarif
+# Updated to ignore low severity/low confidence issues
